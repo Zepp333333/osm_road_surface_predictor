@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GPX Track on OpenStreetMap</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
+  <style>
+  #map {
+    height: 100vh;
+  }
+  #loading {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 1000;
+    display: none;
+  }
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+<div id="loading">Loading...</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+<script>
+
+var initialCoordinates = {{initial_coordinates | tojson | safe}};
+
+var map = L.map('map').setView([initialCoordinates.lat, initialCoordinates.lon], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+}).addTo(map);
+
+var drawnItems = new L.FeatureGroup().addTo(map);
+
+var drawControl = new L.Control.Draw({
+  draw: {
+    polyline: false,
+    polygon: false,
+    circle: false,
+    marker: false,
+    circlemarker: false,
+
+    rectangle: {
+      shapeOptions: {
+        color: '#6bc2e5'
+      }
+    }
+  },
+  // edit: {
+  //   featureGroup: drawnItems
+  // }
+});
+
+map.addControl(drawControl);
+
+L.Control.CustomButton = L.Control.extend({
+    options: {
+        position: 'topright'
+    },
+
+    onAdd: function () {
+        var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+
+        var centerButton = L.DomUtil.create('button', 'leaflet-bar-part leaflet-bar-part-top-and-bottom', container);
+        centerButton.innerHTML = 'Center Map';
+        centerButton.onclick = function () {
+            map.once('locationfound', function(e){
+                map.setView(e.latlng, map.getZoom());
+            });
+            map.locate();
+        };
+
+        var clearButton = L.DomUtil.create('button', 'leaflet-bar-part leaflet-bar-part-top-and-bottom', container);
+        clearButton.innerHTML = 'Clear Map';
+        clearButton.onclick = function () {
+            drawnItems.clearLayers();
+        };
+
+        return container;
+    }
+});
+
+var customButton = new L.Control.CustomButton();
+map.addControl(customButton);
+
+var colors = ['red', 'blue', 'green', 'purple', 'orange', 'black'];
+
+map.on('draw:created', function (e) {
+  var type = e.layerType,
+  layer = e.layer;
+
+  if (type === 'rectangle') {
+    // Show loading indicator
+    document.getElementById('loading').style.display = 'block';
+
+    var bounds = layer.getBounds();
+    var minLat = bounds.getSouthWest().lat;
+    var minLong = bounds.getSouthWest().lng;
+    var maxLat = bounds.getNorthEast().lat;
+    var maxLong = bounds.getNorthEast().lng;
+
+    fetch('http://localhost:8000/gpx?min_lat=' + minLat + '&min_long=' + minLong + '&max_lat=' + maxLat + '&max_long=' + maxLong)
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (data) {
+            console.log(data);
+
+            // Process the data
+            data.forEach((gpx, index) => {
+                gpx.track_segments.forEach(segment => {
+                    var latlngs = segment.track_points.map(point => [point.lat, point.lon]);
+                    console.log(latlngs);
+
+                    var polyline = L.polyline(latlngs, {color: colors[index % colors.length]}).addTo(drawnItems);
+                });
+            });
+
+        })
+        .catch(function (error) {
+            console.log(error);
+        })
+        .finally(function () {
+            // Hide loading indicator
+            document.getElementById('loading').style.display = 'none';
+        });
+
+    drawnItems.addLayer(layer);
+  }
+});
+
+</script>
+
+</body>
+</html>

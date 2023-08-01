@@ -1,0 +1,55 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="26">
+            <item index="0" class="java.lang.String" itemvalue="uWSGI" />
+            <item index="1" class="java.lang.String" itemvalue="mypy" />
+            <item index="2" class="java.lang.String" itemvalue="pytest-django" />
+            <item index="3" class="java.lang.String" itemvalue="yapf" />
+            <item index="4" class="java.lang.String" itemvalue="more-itertools" />
+            <item index="5" class="java.lang.String" itemvalue="pre-commit" />
+            <item index="6" class="java.lang.String" itemvalue="python-dotenv" />
+            <item index="7" class="java.lang.String" itemvalue="pylint-django" />
+            <item index="8" class="java.lang.String" itemvalue="requests-oauthlib" />
+            <item index="9" class="java.lang.String" itemvalue="pytest-cov" />
+            <item index="10" class="java.lang.String" itemvalue="pytest-mock" />
+            <item index="11" class="java.lang.String" itemvalue="freezegun" />
+            <item index="12" class="java.lang.String" itemvalue="django-health-check" />
+            <item index="13" class="java.lang.String" itemvalue="pytest-datafiles" />
+            <item index="14" class="java.lang.String" itemvalue="Markdown" />
+            <item index="15" class="java.lang.String" itemvalue="welltory-python-logging" />
+            <item index="16" class="java.lang.String" itemvalue="xxhash" />
+            <item index="17" class="java.lang.String" itemvalue="xattr" />
+            <item index="18" class="java.lang.String" itemvalue="django-prettyjson" />
+            <item index="19" class="java.lang.String" itemvalue="pytest-sugar" />
+            <item index="20" class="java.lang.String" itemvalue="ipython" />
+            <item index="21" class="java.lang.String" itemvalue="orjson" />
+            <item index="22" class="java.lang.String" itemvalue="dis-datalake-client" />
+            <item index="23" class="java.lang.String" itemvalue="psutil" />
+            <item index="24" class="java.lang.String" itemvalue="django-redis" />
+            <item index="25" class="java.lang.String" itemvalue="pylint-mccabe" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N803" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="import_services.strava.pull.tasks.provider_name" />
+          <option value="service.fitbitimport.tasks.log_id" />
+          <option value="import_services.strava.pull.views.opeer_operation_id" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
