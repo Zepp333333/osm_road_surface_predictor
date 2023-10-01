@@ -45,7 +45,11 @@ class TrackPoint:
         self.time = time
 
     def as_dict(self) -> dict:
-        return {"lat": self.lat, "lon": self.lon, "time": self.time.isoformat()}
+        return {
+            "lat": self.lat,
+            "lon": self.lon,
+            "time": self.time.isoformat() if self.time else None,
+        }
 
 
 class TrackSegment:
@@ -84,11 +88,11 @@ class GPX:
                 # File
                 # "/Users/sergey/projects/osm_road_surface_predictor/app.py", line
                 # 55, in read_gpx
-                # gpx_list.extend(GPX.list_of_gpx_from_xml(gpx_page))
+                # gpx_list.extend(GPX.extract_list_of_gpx_from_xml(gpx_page))
                 # ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
                 # File
                 # "/Users/sergey/projects/osm_road_surface_predictor/public_traces.py", line  # noqa: E501
-                # 106, in list_of_gpx_from_xml
+                # 106, in extract_list_of_gpx_from_xml
                 # gpx_list.append(cls.from_xml(trk))
                 # ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
                 # File
@@ -98,8 +102,12 @@ class GPX:
                 # ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^  # noqa: E501
                 # AttributeError: 'NoneType'
                 # objecthas no attribute 'text'
-                time_str = trkpt.find("gpx:time", cls.gpx_namespace).text
-                time = datetime.strptime(time_str, "%Y-%m-%dT%H:%M:%SZ")
+                time_str = trkpt.find("gpx:time", cls.gpx_namespace)
+                if time_str:
+                    time_str = time_str.text
+                    time = datetime.strptime(time_str, "%Y-%m-%dT%H:%M:%SZ")
+                else:
+                    time = None
 
                 track_points.append(TrackPoint(lat, lon, time))
 
@@ -115,7 +123,7 @@ class GPX:
             return None
 
     @classmethod
-    def list_of_gpx_from_xml(cls, xml_string: str) -> List[Self]:
+    def extract_list_of_gpx_from_xml(cls, xml_string: str) -> List[Self]:
         root = ET.fromstring(xml_string)
 
         gpx_list = []

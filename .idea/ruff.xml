@@ -2,6 +2,6 @@
 <project version="4">
   <component name="RuffConfigService">
     <option name="globalRuffExecutablePath" value="$USER_HOME$/work/welltory/dis/data-import/venv-django/bin/ruff" />
-    <option name="projectRuffExecutablePath" value="$USER_HOME$/work/welltory/rnd/lsd/apps/welltory_cp_hrv_calculation/venv/bin/ruff" />
+    <option name="projectRuffExecutablePath" value="$PROJECT_DIR$/venv/bin/ruff" />
   </component>
 </project>

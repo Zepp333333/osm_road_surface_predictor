@@ -3,7 +3,7 @@ version: '3.1' #format version for this docker compose file
 services:
   mongo-container:
 #    image: mongo:latest
-    image: arm64v8/mongo:6.0
+    image: arm64v8/mongo:latest
     platform: linux/arm64/v8
     volumes:
       - "~/docker/mongodb:/data/db:rw"

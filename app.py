@@ -37,8 +37,9 @@ async def read_gpx(
     max_long: Optional[float] = None,
 ):
     bbox = BBox(min_lat=min_lat, min_long=min_long, max_lat=max_lat, max_long=max_long)
+    print(f"xxx {bbox}")
     gpx_list = []
     for gpx_page in public_traces_api.query_with_pagination(f"trackpoints?bbox={bbox}"):
-        gpx_list.extend(GPX.list_of_gpx_from_xml(gpx_page))
+        gpx_list.extend(GPX.extract_list_of_gpx_from_xml(gpx_page))
     print(gpx_list)
     return [track.as_dict() for track in gpx_list]
