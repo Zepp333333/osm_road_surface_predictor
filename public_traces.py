@@ -155,7 +155,9 @@ class GPXTrace:
         return speed
 
     @staticmethod
-    def add_avg_max_speed_to_track(track_with_speed: Track) -> Track:
+    def add_avg_max_speed_to_track(
+        track_with_speed: Track,
+    ) -> Track:  # todo: consider movingpandas
         total_speed = 0.0
         total_points = 0
         max_speed = 0.0
