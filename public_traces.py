@@ -1,15 +1,21 @@
 """
 https://wiki.openstreetmap.org/wiki/API_v0.6#GPS_traces
 """
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from typing import Generator
 
-from datetime import datetime
-from typing import Generator, List, Self
-from xml.etree import ElementTree as ET
-
+import gpxpy
+from geopy.distance import geodesic
+from gpxpy.gpx import GPX, GPXTrack, GPXTrackSegment
 from OSMPythonTools.api import Api
 
+from coord_tools import BBox
 
-class PublicTracesApi(Api):
+MIN_TRACK_POINTS = 10
+
+
+class PublicTracesApi(Api):  # fixme - convert to async
     max_pages_to_retrieve = 5
 
     def _rawToResult(
@@ -23,7 +29,7 @@ class PublicTracesApi(Api):
     ):
         return data
 
-    def query_with_pagination(
+    async def query_with_pagination(
         self, query_str: str, max_pages_to_retrieve: int | None = None
     ) -> Generator[str, None, None]:
         page_num = 0
@@ -38,112 +44,143 @@ class PublicTracesApi(Api):
             page_num += 1
 
 
-class TrackPoint:
-    def __init__(self, lat: float, lon: float, time: datetime) -> None:
-        self.lat = lat
-        self.lon = lon
-        self.time = time
-
-    def as_dict(self) -> dict:
-        return {
-            "lat": self.lat,
-            "lon": self.lon,
-            "time": self.time.isoformat() if self.time else None,
-        }
-
-
-class TrackSegment:
-    def __init__(self, track_points: List[TrackPoint]) -> None:
-        self.track_points = track_points
-
-    def as_dict(self) -> dict:
-        return {"track_points": [point.as_dict() for point in self.track_points]}
-
-
-class GPX:
-    gpx_namespace = {"gpx": "http://www.topografix.com/GPX/1/0"}
-
-    def __init__(
-        self, name: str, desc: str, url: str, track_segments: List[TrackSegment]
-    ) -> None:
-        self.name = name
-        self.desc = desc
-        self.url = url
-        self.track_segments = track_segments
-
-    @classmethod
-    def from_xml(cls, trk: ET.Element) -> Self:
-        name = cls.get_track_attribute(trk, "name")
-        desc = cls.get_track_attribute(trk, "desc")
-        url = cls.get_track_attribute(trk, "url")
-        track_segments = []
-
-        for trkseg in trk.findall("gpx:trkseg", cls.gpx_namespace):
-            track_points = []
-
-            for trkpt in trkseg.findall("gpx:trkpt", cls.gpx_namespace):
-                lat = float(trkpt.get("lat"))
-                lon = float(trkpt.get("lon"))
-                # fixme:
-                # File
-                # "/Users/sergey/projects/osm_road_surface_predictor/app.py", line
-                # 55, in read_gpx
-                # gpx_list.extend(GPX.extract_list_of_gpx_from_xml(gpx_page))
-                # ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
-                # File
-                # "/Users/sergey/projects/osm_road_surface_predictor/public_traces.py", line  # noqa: E501
-                # 106, in extract_list_of_gpx_from_xml
-                # gpx_list.append(cls.from_xml(trk))
-                # ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
-                # File
-                # "/Users/sergey/projects/osm_road_surface_predictor/public_traces.py", line  # noqa: E501
-                # 83, in from_xml
-                # time_str = trkpt.find("gpx:time", cls.gpx_namespace).text
-                # ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^  # noqa: E501
-                # AttributeError: 'NoneType'
-                # objecthas no attribute 'text'
-                time_str = trkpt.find("gpx:time", cls.gpx_namespace)
-                if time_str:
-                    time_str = time_str.text
-                    time = datetime.strptime(time_str, "%Y-%m-%dT%H:%M:%SZ")
-                else:
-                    time = None
-
-                track_points.append(TrackPoint(lat, lon, time))
-
-            track_segments.append(TrackSegment(track_points))
-
-        return cls(name, desc, url, track_segments)
-
-    @classmethod
-    def get_track_attribute(cls, trk, attribute_name: str) -> str | None:
-        try:
-            return trk.find("gpx:" + attribute_name, cls.gpx_namespace).text
-        except AttributeError:
-            return None
-
-    @classmethod
-    def extract_list_of_gpx_from_xml(cls, xml_string: str) -> List[Self]:
-        root = ET.fromstring(xml_string)
-
-        gpx_list = []
-
-        for trk in root.findall("gpx:trk", cls.gpx_namespace):
-            gpx_list.append(cls.from_xml(trk))
-
-        return gpx_list
-
+class AsDictMixin:
     def as_dict(self):
-        return {
-            "name": self.name,
-            "desc": self.desc,
-            "url": self.url,
-            "track_segments": [segment.as_dict() for segment in self.track_segments],
-        }
+        return asdict(self)
+
+
+@dataclass
+class TrackPoint(AsDictMixin):
+    lat: float
+    lon: float
+    time: datetime
+    speed_kph: float | None = None
+
+
+@dataclass
+class TrackSegment(AsDictMixin):
+    track_points: list[TrackPoint]
+
+
+@dataclass
+class Track(AsDictMixin):
+    name: str
+    desc: str
+    url: str
+    track_segments: list[TrackSegment]
+    average_speed_kph: float | None = None
+    track_max_speed_kph: float | None = None
+
+
+class GPXTrace:
+    def __init__(self, gpx_pages: list[str], bbox: BBox) -> None:
+        self.bbox = bbox
+        self.gpxs = [gpxpy.parse(gpx_str) for gpx_str in gpx_pages]
+
+        pre_processed_tracks = []
+        for gpx in self.gpxs:
+            for track in gpx.tracks:
+                pre_processed_tracks.append(self.convert_gpx_to_track(track))
+
+        processed_tracks = self.remove_invalid_tracks(pre_processed_tracks)
+        processed_tracks_with_speed = [
+            self.add_speed_to_track(track) for track in processed_tracks
+        ]
+
+        self.tracks = [
+            self.add_avg_max_speed_to_track(track)
+            for track in processed_tracks_with_speed
+        ]
 
     @staticmethod
-    def point_as_dict(point: TrackPoint):
-        return {"lat": point.lat, "lon": point.lon, "time": point.time.isoformat()}
+    def remove_invalid_tracks(tracks: list[Track]) -> list[Track]:
+        """remove tracks which points do not have time or too few points"""
+        valid_tracks = []
+        for track in tracks:
+            for segment in track.track_segments:
+                if (
+                    all([point.time for point in segment.track_points])
+                    and len(segment.track_points) >= MIN_TRACK_POINTS
+                ):
+                    valid_tracks.append(track)
+        return valid_tracks
+
+    @staticmethod
+    def build_track_segment(segment: GPXTrackSegment) -> TrackSegment:
+        return TrackSegment(
+            [
+                TrackPoint(point.latitude, point.longitude, point.time)
+                for point in segment.points
+            ]
+        )
+
+    def add_speed_to_track(self, track: Track) -> Track:
+        for segment in track.track_segments:
+            for i in range(len(segment.track_points)):
+                if i == 0:
+                    continue
+
+                curr_point = segment.track_points[i]
+                prev_point = segment.track_points[i - 1]
+
+                speed = self.calculate_speed_between_to_points(
+                    curr_point=curr_point, prev_point=prev_point
+                )
+
+                curr_point.speed_kph = speed
+
+            # assume that the first point has the same speed as the second point
+            try:
+                segment.track_points[0].speed_kph = segment.track_points[1].speed_kph
+            except IndexError:
+                pass
+
+        return track
+
+    @staticmethod
+    def calculate_speed_between_to_points(
+        curr_point: TrackPoint, prev_point: TrackPoint
+    ) -> float:
+        curr_coord = (curr_point.lat, curr_point.lon)
+        prev_coord = (prev_point.lat, prev_point.lon)
+        curr_time = curr_point.time.replace(tzinfo=timezone.utc)
+        prev_time = prev_point.time.replace(tzinfo=timezone.utc)
+        distance = geodesic(curr_coord, prev_coord).meters  # distance in meters
+        time_delta = (
+            curr_time - prev_time
+        ).total_seconds()  # time difference in seconds
+        if time_delta == 0:
+            return 0.0
+        speed = (distance / time_delta) * 3.6  # speed in km/h
+        return speed
+
+    @staticmethod
+    def add_avg_max_speed_to_track(track_with_speed: Track) -> Track:
+        total_speed = 0.0
+        total_points = 0
+        max_speed = 0.0
+
+        for segment in track_with_speed.track_segments:
+            for point in segment.track_points:
+                total_speed += point.speed_kph or 0.0
+                total_points += 1
+                max_speed = max(max_speed, point.speed_kph or 0.0)
+
+        average_speed = total_speed / total_points if total_points > 0 else 0.0
+
+        track_with_speed.average_speed_kph = average_speed
+        track_with_speed.track_max_speed_kph = max_speed
+        return track_with_speed
+
+    def convert_gpx_to_track(self, gpx_track: GPXTrack) -> Track:
+        return Track(
+            name=gpx_track.name,
+            desc=gpx_track.description,
+            url=gpx_track.link,
+            track_segments=[
+                self.build_track_segment(segment) for segment in gpx_track.segments
+            ],
+        )
 
 
 public_traces_api = PublicTracesApi()
